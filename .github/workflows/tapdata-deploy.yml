@@ -1,0 +1,64 @@
+# TapData Deploy (Matrix) —— 租户端 caller（部署主入口，调用 worker 的 matrix 部署）
+# ============================================================================
+# 触发方式：
+#   - push 到 main 且改动 *_tapdata_export/** → 自动部署到 dev
+#   - 推送 tag → 自动部署到 sit
+#   - workflow_dispatch 手动触发 → 部署到所选环境（dev / sit / lpt）
+#
+# 实际运行 actions 的是本租户仓库，通过 uses: 调用 worker 仓库的
+# .github/workflows/tapdata-deploy.yml（固定入口；其内容是 matrix 变体）。
+#
+# 本仓用途：CICD 凭据格式 3（`{CONNECTION}_DSN` 走 Variables + `{CONNECTION}_PASSWORD`
+#   走 Secrets）的实机验证台，对应工单 vault-uri-var-format。
+#   项目名 = 仓库名 dsn-test，导出目录 dsn-test_tapdata_export/。
+#   连接级键**不带环境前缀**，环境隔离靠 GitHub Environments 本身
+#   （同名键配在各 environment 下）。
+#
+# ⚠ worker 引用固定在 @main：格式 3 需要 worker 的 generate-vault.sh 已支持 _DSN，
+#   否则四级查找全部落空、直接 ::error:: 退出。
+# ============================================================================
+name: TapData Deploy (Matrix)
+run-name: "🚀 Deploy · ${{ inputs.project || vars.PROJECT_NAME || github.event.repository.name }} → ${{ inputs.target_env || (github.ref_type == 'tag' && 'sit' || 'dev') }} · ${{ github.event_name == 'workflow_dispatch' && format('manual by @{0}', github.actor) || (github.ref_type == 'tag' && format('tag {0}', github.ref_name) || format('branch {0}', github.ref_name)) }}"
+
+# 并发守卫：同 project + 同目标 env 的部署串行化，防止并发导入同一 TapData 项目组。
+# 不同 project / 不同 env 仍可并行（TapData 服务端保证跨 group 并发导入安全）。
+# cancel-in-progress: false → 绝不中断进行中的部署，新触发排队等待（含等待人工审批期间）。
+concurrency:
+  group: tapdata-deploy-${{ inputs.project || vars.PROJECT_NAME || github.event.repository.name }}-${{ inputs.target_env || (github.ref_type == 'tag' && 'sit' || 'dev') }}
+  cancel-in-progress: false
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '*_tapdata_export/**'
+    tags:
+      - '*'
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - dev
+          - sit
+          - lpt
+      project:
+        description: 'Project name (留空则取 vars.PROJECT_NAME，再回落到仓库名)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  deploy:
+    uses: "sam101010101010/cicd-worker/.github/workflows/tapdata-deploy.yml@main"
+    with:
+      project: ${{ inputs.project || vars.PROJECT_NAME || github.event.repository.name }}
+      target_env: ${{ inputs.target_env || '' }}
+      caller_repo: ${{ github.repository }}
+      caller_sha: ${{ github.sha }}
+      caller_event: ${{ github.event_name }}
+      caller_ref: ${{ github.ref }}
+      worker_repo: "sam101010101010/cicd-worker"
+    secrets: inherit
