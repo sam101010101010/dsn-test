@@ -604,6 +604,7 @@
         "comment" : "",
         "data_type" : "STRING(300)",
         "default_value" : null,
+        "field_alias" : "城市",
         "field_name" : "CITY",
         "id" : "6a71616cc19eb32e90b6e5ea_MDM_CUSTOMER_CITY",
         "is_auto_allowed" : true,
