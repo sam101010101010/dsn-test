@@ -1,24 +1,30 @@
-# TapData Deploy (Matrix) —— 租户端 caller（部署主入口，调用 worker 的 matrix 部署）
+# TapData Deploy (Matrix) —— 租户端 caller（自动部署主入口，调用 worker 的 matrix 部署）
 # ============================================================================
-# 触发方式：
+# 这是租户仓库的【主】部署入口：隐藏自动跳过步骤的 matrix 版部署。
+# 触发方式（与现有单仓库 caller 一致）：
 #   - push 到 main 且改动 *_tapdata_export/** → 自动部署到 dev
 #   - 推送 tag → 自动部署到 sit
-#   - workflow_dispatch 手动触发 → 部署到所选环境（dev / sit / lpt）
+#   - workflow_dispatch 手动触发 → 部署到所选环境
 #
-# 实际运行 actions 的是本租户仓库，通过 uses: 调用 worker 仓库的
-# .github/workflows/tapdata-deploy.yml（固定入口；其内容是 matrix 变体）。
+# 部署逻辑是多租户：实际运行 actions 的是本租户仓库，通过 uses: 调用 worker 仓库的
+# .github/workflows/tapdata-deploy.yml（固定入口；其内容当前是 matrix 变体，由 worker
+# 侧从 .github/deploy/ 选型库提升而来）。worker 作为共享部署引擎被复用。
 #
-# 本仓用途：CICD 凭据格式 3（`{CONNECTION}_DSN` 走 Variables + `{CONNECTION}_PASSWORD`
-#   走 Secrets）的实机验证台，对应工单 vault-uri-var-format。
-#   项目名 = 仓库名 dsn-test，导出目录 dsn-test_tapdata_export/。
-#   连接级键**不带环境前缀**，环境隔离靠 GitHub Environments 本身
-#   （同名键配在各 environment 下）。
-#
-# ⚠ worker 引用固定在 @main：格式 3 需要 worker 的 generate-vault.sh 已支持 _DSN，
-#   否则四级查找全部落空、直接 ::error:: 退出。
+# 重要：旧的 tapdata-deploy.yml caller 已移到 .github/disabled/（自动触发原样保留但
+# 不生效）。若日后要把它移回 .github/workflows/ 启用，需先停用本 matrix 版的 push/tags，
+# 否则同一次 push/tag 会同时触发新旧两条流水线、部署两遍。
 # ============================================================================
 name: TapData Deploy (Matrix)
-run-name: "🚀 Deploy · ${{ inputs.project || vars.PROJECT_NAME || github.event.repository.name }} → ${{ inputs.target_env || (github.ref_type == 'tag' && 'sit' || 'dev') }} · ${{ github.event_name == 'workflow_dispatch' && format('manual by @{0}', github.actor) || (github.ref_type == 'tag' && format('tag {0}', github.ref_name) || format('branch {0}', github.ref_name)) }}"
+# run-name 末尾是本次部署对应的 PR 标题：Actions 列表从右侧截断，放末尾被切掉的只是它的尾巴，
+# 而 project → env 这些定长片段一定看得见。别再把它挪回最前面——push 事件取到的
+# github.event.head_commit.message 是完整 message（标题 + 正文），GH 表达式没有 split()/substring，
+# run-name 阶段拿不到首行；带正文的 squash commit（如导出 bot 那种附文件清单的）会几百字符打头，
+# 把 project → env 顶出可视宽度，正好丢掉最该看见的那截。
+# dev 部署由 PR 合入 main 触发，push 事件里没有 pull_request 字段，但 squash 合并的 commit 标题就是
+# 「PR 标题 (#N)」、merge commit 则是「Merge pull request #N from …」，两种合并方式都足以定位 PR。
+# 真·pull_request 事件（若租户日后接上）优先取 pull_request.title。tag / 手动触发没有 PR，整段连同
+# 「 · 」分隔符一起省略——🚀 本身已经是 deploy 的标识（rollback 用 ⏪），不靠文字区分。
+run-name: "🚀 ${{ inputs.project || vars.PROJECT_NAME || github.event.repository.name }} → ${{ inputs.target_env || (github.ref_type == 'tag' && 'sit' || 'dev') }} · ${{ github.event_name == 'workflow_dispatch' && format('manual by @{0}', github.actor) || (github.ref_type == 'tag' && format('tag {0}', github.ref_name) || format('branch {0}', github.ref_name)) }}${{ (github.event_name != 'workflow_dispatch' && github.ref_type != 'tag' && format(' · {0}', github.event.pull_request.title || github.event.head_commit.message)) || '' }}"
 
 # 并发守卫：同 project + 同目标 env 的部署串行化，防止并发导入同一 TapData 项目组。
 # 不同 project / 不同 env 仍可并行（TapData 服务端保证跨 group 并发导入安全）。
@@ -52,6 +58,7 @@ on:
 
 jobs:
   deploy:
+    # TODO: Replace {WORKER_REPO} with actual org/repo, e.g. your-org/tapdata-cicd-worker
     uses: "sam101010101010/cicd-worker/.github/workflows/tapdata-deploy.yml@main"
     with:
       project: ${{ inputs.project || vars.PROJECT_NAME || github.event.repository.name }}
