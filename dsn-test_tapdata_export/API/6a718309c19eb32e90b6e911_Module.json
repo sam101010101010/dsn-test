@@ -1154,7 +1154,7 @@
         "defaultvalue" : "",
         "description" : "",
         "name" : "EMAIL",
-        "required" : true,
+        "required" : false,
         "type" : "string"
       } ],
       "path" : "",
