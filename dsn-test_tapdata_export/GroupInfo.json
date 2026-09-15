@@ -1,0 +1,31 @@
+[ {
+  "collectionName" : "GroupInfo",
+  "json" : {
+    "description" : "",
+    "gitInfo" : {
+      "branch" : "main",
+      "repoUrl" : "https://github.com/sam101010101010/dsn-test.git"
+    },
+    "id" : "6a71836cc19eb32e90b6e912",
+    "name" : "dsn-test",
+    "resetTaskList" : [ ],
+    "resourceItemList" : [ {
+      "id" : "6a7161adc19eb32e90b6e5f1",
+      "name" : "mysql-fdm",
+      "type" : "MIGRATE_TASK"
+    }, {
+      "id" : "6a7161e4c19eb32e90b6e703",
+      "name" : "MDM_CUSTOMER",
+      "type" : "SYNC_TASK"
+    }, {
+      "id" : "6a7182e8c19eb32e90b6e910",
+      "name" : "customer_by_country",
+      "type" : "MODULE"
+    }, {
+      "id" : "6a718309c19eb32e90b6e911",
+      "name" : "customer_by_email",
+      "type" : "MODULE"
+    } ],
+    "user_id" : "62bc5008d4958d013d97c7a6"
+  }
+} ]
